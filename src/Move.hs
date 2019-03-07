@@ -169,12 +169,6 @@ colWalls s@((x,y),((bx,by):rest),_,_) (w,h)
   | y < 0 = True
   | otherwise = False
 
-
-forbidden_pos :: GameState -> [Action]
-forbidden_pos gs@(GameState food height width turn _ _ snakes you) = undefined
-  where mypos  = getyou gs
-        checks = []
-
 checkMoveWorld :: Action -> GameState -> Bool
 checkMoveWorld a gs@(GameState _ h w _ _ _ snakes you) = not col -- return True if is safe
   where col = colWalls (getyou gs) (w, h)
