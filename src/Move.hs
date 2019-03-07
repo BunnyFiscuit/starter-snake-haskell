@@ -16,6 +16,9 @@ data Pos = Pos { posobject :: !String
                , y         :: Int}
                deriving (Eq, Show)
 
+instance Ord Pos where
+    (Pos _ x y) `compare` (Pos _ x2 y2) = (x,y) `compare` (x2, y2)
+
 instance FromJSON Pos where
   parseJSON (Object v) =
     Pos <$> v .: "object"
@@ -119,4 +122,56 @@ getsnakes gs = filter (/= getyou gs) $ map snaketosnek (snakes gs)
           (posToPosition (head body),map posToPosition body, health, sid)
 
 compute_move :: GameState -> Action
-compute_move gs@(GameState food height width turn gid gsobject snakes you) = U
+compute_move gs@(GameState food height width turn gid gsobject snakes you) =
+  case (bestMove head gs) of
+    [] -> U
+    xs -> safeStep xs
+  where (head, body, health, sid) = getyou gs
+        safeStep xs = correct (Prelude.head xs) gs
+
+correct :: Action -> GameState -> Action
+correct a gs =
+  case move of
+    True -> a -- safe
+    False -> correct' a gs
+  where move = checkMove a gs
+
+correct' :: Action -> GameState -> Action
+correct' a gs
+  | a == U || a == D = if checkMove L gs then L else R
+  | a == R || a == L = if checkMove U gs then U else R
+
+bestMove :: Position -> GameState -> [Action]
+bestMove (x,y) gs@(GameState (Food xs _) h w t _ _ snakes you) =
+  map (\(Pos s x' y') -> moveToFoodR snek (x',y') (w,h)) food ++ [U]
+  where food = sort xs
+        snek = getyou gs
+        dir  = direction snek
+        (col, coldir) = undefined
+
+moveToFoodR :: Snek -> Position -> Position-> Action
+moveToFoodR s@((x,y), bod, _ , _)(fx,fy) (w, h)
+  | x < fx = R -- && safe (x+1,y) = R
+  | x > fx = L-- && safe (x-1,y) = L
+  | y > fy = U -- && safe (x,y-1) = U
+  | y < fy = D-- && safe (x,y+1) = D
+
+-- if collision returns true
+colWalls :: Snek -> Position -> (Bool, Action)
+colWalls s@((x,y),((bx,by):rest),_,_) (w,h)
+  | x < 0 = (True, L)
+  | x > w = (True, R)
+  | y > h = (True, D)
+  | y < 0 = (True, U)
+  | otherwise = (False, direction s)
+
+checkMove :: Action -> GameState -> Bool
+checkMove a gs@(GameState _ h w _ _ _ snakes you) = not col -- return True if is safe
+  where (col, _) = colWalls (getyou gs) (w, h)
+
+direction :: Snek -> Action
+direction ((hx,hy), ((bx,by):rest),_,_)
+  | hy < by   = U
+  | hy > by   = D
+  | hx < bx   = L
+  | hx > bx   = R

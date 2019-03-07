@@ -19,11 +19,11 @@ import End
 -- See Start.hs for different snake configuration options.
 -- Not super important, but perhaps it is nice to change the color.
 snakeConfig :: StartResponse
-snakeConfig = StartResponse "#641E16"        -- color
+snakeConfig = StartResponse "#FFFFFF"        -- color
                             "A0F000"         -- backup-color
                             "haskell > java" -- name
-                            "pixel"          -- head type
-                            "pixel"          -- tail type
+                            "bendr"         -- head type
+                            "pixel"           -- tail type
 
 ex = do
   inp <- liftIO $ lookupEnv "PORT"
