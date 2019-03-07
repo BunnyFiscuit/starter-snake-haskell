@@ -77,7 +77,7 @@ data MoveResponse = MoveResponse { move :: Action }
 instance ToJSON MoveResponse where
   toJSON (MoveResponse move) = object [ "move" .= move ]
 
-data Action = U | D | L | R deriving Eq
+data Action = U | D | L | R deriving  (Show, Eq)
 
 instance ToJSON Action where
   toJSON U = String "up"
@@ -122,52 +122,76 @@ getsnakes gs = filter (/= getyou gs) $ map snaketosnek (snakes gs)
           (posToPosition (head body),map posToPosition body, health, sid)
 
 compute_move :: GameState -> Action
-compute_move gs@(GameState food height width turn gid gsobject snakes you) =
-  case (bestMove head gs) of
-    [] -> U
-    xs -> safeStep xs
+compute_move gs@(GameState food height width turn gid gsobject snakes you) = safeStep
   where (head, body, health, sid) = getyou gs
-        safeStep xs = correct (Prelude.head xs) gs
+        safeStep = correct x gs
+        (x:xs)   = bestMove head gs
 
 correct :: Action -> GameState -> Action
-correct a gs =
+correct a gs@(GameState food h w _ _ _ snakes you) =
   case move of
-    True -> a -- safe
+    True -> a
     False -> correct' a gs
-  where move = checkMove a gs
+  where moveW = checkMoveWorld a gs
+        (msb, p) = colBod a (x,y) bod
+        (la, np) = case msb of
+                      True  -> colBod a p bod
+                      False -> (False, np)
+        move  = la
+        ((x,y),bod,_,_) = getyou gs
 
 correct' :: Action -> GameState -> Action
 correct' a gs
   | a == U || a == D = if checkMove L gs then L else R
-  | a == R || a == L = if checkMove U gs then U else R
+  | a == R || a == L = if checkMove R gs then U else D
+  where checkMove action gst = checkMoveWorld action gst
 
 bestMove :: Position -> GameState -> [Action]
 bestMove (x,y) gs@(GameState (Food xs _) h w t _ _ snakes you) =
-  map (\(Pos s x' y') -> moveToFoodR snek (x',y') (w,h)) food ++ [U]
+  map (\(Pos s x' y') -> moveToFoodR snek (x',y') (w,h)) food -- ++ [U]
   where food = sort xs
         snek = getyou gs
         dir  = direction snek
-        (col, coldir) = undefined
 
 moveToFoodR :: Snek -> Position -> Position-> Action
 moveToFoodR s@((x,y), bod, _ , _)(fx,fy) (w, h)
-  | x < fx = R -- && safe (x+1,y) = R
-  | x > fx = L-- && safe (x-1,y) = L
-  | y > fy = U -- && safe (x,y-1) = U
-  | y < fy = D-- && safe (x,y+1) = D
+  | x < fx = R
+  | x > fx = L
+  | y > fy = U
+  | y < fy = D
 
 -- if collision returns true
-colWalls :: Snek -> Position -> (Bool, Action)
+colWalls :: Snek -> Position -> Bool
 colWalls s@((x,y),((bx,by):rest),_,_) (w,h)
-  | x < 0 = (True, L)
-  | x > w = (True, R)
-  | y > h = (True, D)
-  | y < 0 = (True, U)
-  | otherwise = (False, direction s)
+  | x < 0 = True
+  | x > w = True
+  | y > h = True
+  | y < 0 = True
+  | otherwise = False
 
-checkMove :: Action -> GameState -> Bool
-checkMove a gs@(GameState _ h w _ _ _ snakes you) = not col -- return True if is safe
-  where (col, _) = colWalls (getyou gs) (w, h)
+
+forbidden_pos :: GameState -> [Action]
+forbidden_pos gs@(GameState food height width turn _ _ snakes you) = undefined
+  where mypos  = getyou gs
+        checks = []
+
+checkMoveWorld :: Action -> GameState -> Bool
+checkMoveWorld a gs@(GameState _ h w _ _ _ snakes you) = not col -- return True if is safe
+  where col = colWalls (getyou gs) (w, h)
+
+colBod :: Action -> Position -> [Position] -> (Bool, Position)
+colBod a me [] = (True, newPos me a)
+colBod a me (bod:rest)
+  | newPos me a == bod = (False, me)
+  | otherwise          = colBod a me rest
+
+newPos :: Position -> Action -> Position
+newPos (x,y) a =
+  case a of
+    U -> (x,y-1)
+    D -> (x,y+1)
+    L -> (x-1,y)
+    R -> (x+1,y)
 
 direction :: Snek -> Action
 direction ((hx,hy), ((bx,by):rest),_,_)
