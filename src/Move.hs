@@ -16,9 +16,6 @@ data Pos = Pos { posobject :: !String
                , y         :: Int}
                deriving (Eq, Show)
 
-instance Ord Pos where
-    (Pos _ x y) `compare` (Pos _ x2 y2) = (x,y) `compare` (x2, y2)
-
 instance FromJSON Pos where
   parseJSON (Object v) =
     Pos <$> v .: "object"
@@ -133,12 +130,15 @@ correct a gs@(GameState food h w _ _ _ snakes you) =
     True -> a
     False -> correct' a gs
   where moveW = checkMoveWorld a gs
-        (msb, p) = colBod a (x,y) bod
-        (la, np) = case msb of
-                      True  -> colBod a p bod
-                      False -> (False, np)
-        move  = la
+        msb   = colBod a (x,y) bod && safeSnakes a (x,y) sneks
+        la    = case msb of
+                      True  -> colBod a newpos bod && safeSnakes a newpos sneks
+                      False -> False
+        mSnakes  = safeSnakes a (x,y) sneks
+        move     = msb
         ((x,y),bod,_,_) = getyou gs
+        sneks           = getsnakes gs
+        newpos          = newPos (x,y) a
 
 correct' :: Action -> GameState -> Action
 correct' a gs
@@ -147,9 +147,9 @@ correct' a gs
   where checkMove action gst = checkMoveWorld action gst
 
 bestMove :: Position -> GameState -> [Action]
-bestMove (x,y) gs@(GameState (Food xs _) h w t _ _ snakes you) =
-  map (\(Pos s x' y') -> moveToFoodR snek (x',y') (w,h)) food -- ++ [U]
-  where food = sort xs
+bestMove (x,y) gs@(GameState f h w t _ _ snakes you) =
+  map (\(x',y') -> moveToFoodR snek (x',y') (w,h)) food -- ++ [U]
+  where food = sortFood (x,y) (getfood gs)
         snek = getyou gs
         dir  = direction snek
 
@@ -173,11 +173,23 @@ checkMoveWorld :: Action -> GameState -> Bool
 checkMoveWorld a gs@(GameState _ h w _ _ _ snakes you) = not col -- return True if is safe
   where col = colWalls (getyou gs) (w, h)
 
-colBod :: Action -> Position -> [Position] -> (Bool, Position)
-colBod a me [] = (True, newPos me a)
+
+-- If collision with body returns False
+colBod :: Action -> Position -> [Position] -> Bool --(Bool, Position)
+colBod a me [] = (True)--, newPos me a)
 colBod a me (bod:rest)
-  | newPos me a == bod = (False, me)
+  | newPos me a == bod = (False)--, me)
   | otherwise          = colBod a me rest
+
+
+-- If collision with another snake returns False
+safeSnakes :: Action -> Position -> [Snek] -> Bool
+safeSnakes a me [] = True
+safeSnakes a me ((hed, bod, _, _):xs)
+  | not safe     = False
+  | otherwise    = safeSnakes a me xs
+  where safe = colBod a me (hed:bod)
+
 
 newPos :: Position -> Action -> Position
 newPos (x,y) a =
@@ -193,3 +205,10 @@ direction ((hx,hy), ((bx,by):rest),_,_)
   | hy > by   = D
   | hx < bx   = L
   | hx > bx   = R
+
+sortFood :: Position -> [Position] -> [Position]
+sortFood (x,y) = sortBy (\(f1x, f1y) (f2x, f2y) ->
+                           compare (abs (x-f1x) + abs (y-f1y))
+                                   (abs (x-f2x) + abs (y-f2y)))
+
+
